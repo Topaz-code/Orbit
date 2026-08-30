@@ -1,0 +1,311 @@
+// Orbit — privacy-first social platform
+// SQLite via the Prisma driver-adapter (better-sqlite3). No engine binaries required.
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+  runtime  = "nodejs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String  @id @default(cuid())
+  username        String  @unique
+  phone           String  @unique
+  email           String  @unique
+  passwordHash    String
+  displayName     String
+  bio             String  @default("")
+  avatarUrl       String  @default("")
+  coverUrl        String  @default("")
+  securityQuestion String @default("")
+  securityAnswerHash String @default("")
+  isOnboarded     Boolean @default(false)
+  privacySettings String  @default("{}")
+  notificationSettings String @default("{}")
+  theme           String  @default("system")
+  tokenVersion    Int     @default(0)
+  isOnline        Boolean @default(false)
+  lastSeen        DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  posts                Post[]
+  comments             Comment[]
+  likes                Like[]
+  bookmarks            Bookmark[]
+  stories              Story[]
+  storyViews           StoryView[]
+  messages             Message[]
+  conversationMembers  ConversationMember[]
+  createdConversations Conversation[]       @relation("ConversationCreator")
+  createdGroups        Group[]              @relation("GroupCreator")
+  groupMembers         GroupMember[]
+  sentRequests         Friendship[]         @relation("Requester")
+  receivedRequests     Friendship[]         @relation("Addressee")
+  notifications        Notification[]       @relation("NotificationOwner")
+  actorNotifications   Notification[]       @relation("NotificationActor")
+  outgoingCalls        Call[]               @relation("Caller")
+  incomingCalls        Call[]               @relation("Receiver")
+
+  @@index([username])
+  @@index([phone])
+  @@map("users")
+}
+
+model Post {
+  id            String   @id @default(cuid())
+  userId        String
+  groupId       String?
+  contentText   String   @default("")
+  mediaUrl      String   @default("")
+  mediaType     String   @default("")
+  linkUrl       String   @default("")
+  linkPreview   String   @default("")
+  likesCount    Int      @default(0)
+  commentsCount Int      @default(0)
+  sharesCount   Int      @default(0)
+  visibility    String   @default("public")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]
+  bookmarks Bookmark[]
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([groupId])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  postId          String
+  userId          String
+  parentCommentId String?
+  content         String
+  createdAt       DateTime @default(now())
+
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@map("comments")
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("likes")
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("bookmarks")
+}
+
+model Story {
+  id        String   @id @default(cuid())
+  userId    String
+  mediaUrl  String
+  mediaType String   @default("image")
+  caption   String   @default("")
+  overlay   String   @default("")
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  views StoryView[]
+
+  @@index([expiresAt])
+  @@map("stories")
+}
+
+model StoryView {
+  id       String   @id @default(cuid())
+  storyId  String
+  userId   String
+  viewedAt DateTime @default(now())
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@map("story_views")
+}
+
+model Conversation {
+  id         String   @id @default(cuid())
+  type       String   @default("direct")
+  name       String   @default("")
+  avatarUrl  String   @default("")
+  createdBy  String
+  groupId    String?  @unique
+  maxMembers Int      @default(10)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  creator  User                 @relation("ConversationCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  group    Group?               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members  ConversationMember[]
+  messages Message[]
+  calls    Call[]
+
+  @@map("conversations")
+}
+
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  role           String   @default("member")
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String   @default("")
+  mediaUrl       String   @default("")
+  mediaType      String   @default("")
+  replyToId      String?
+  isRead         Boolean  @default(false)
+  deletedForAll  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo      Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]    @relation("MessageReplies")
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  avatarUrl   String   @default("")
+  coverUrl    String   @default("")
+  createdBy   String
+  maxMembers  Int      @default(10)
+  privacy     String   @default("public")
+  inviteCode  String   @unique
+  createdAt   DateTime @default(now())
+
+  creator      User          @relation("GroupCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  posts        Post[]
+  conversation Conversation?
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  requester User @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("Addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@map("friendships")
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String
+  actorId       String?
+  type          String
+  referenceId   String   @default("")
+  referenceType String   @default("")
+  content       String
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  user  User  @relation("NotificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model Call {
+  id             String    @id @default(cuid())
+  callerId       String
+  receiverId     String
+  conversationId String?
+  type           String    @default("voice")
+  status         String    @default("ringing")
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+
+  caller       User          @relation("Caller", fields: [callerId], references: [id], onDelete: Cascade)
+  receiver     User          @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([callerId])
+  @@index([receiverId])
+  @@map("calls")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
