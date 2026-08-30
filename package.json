@@ -1,0 +1,38 @@
+{
+  "name": "orbit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orbit \u2014 a privacy-first, self-hostable social platform. Break free. Stay connected.",
+  "license": "MIT",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace server run build && npm --workspace client run build",
+    "start": "npm --workspace server run start",
+    "db:setup": "npm --workspace server run db:setup",
+    "db:migrate": "npm --workspace server run db:migrate",
+    "db:seed": "npm --workspace server run db:seed",
+    "db:reset": "npm --workspace server run db:reset",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace client run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5"
+  },
+  "overrides": {
+    "@prisma/adapter-better-sqlite3": {
+      "better-sqlite3": "^13.0.3"
+    },
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5"
+  }
+}
